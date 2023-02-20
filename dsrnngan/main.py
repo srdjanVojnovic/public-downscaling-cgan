@@ -52,7 +52,7 @@ if __name__ == "__main__":
     with open(config_path, 'r') as f:
         try:
             setup_params = yaml.safe_load(f)
-            print(setup_params)
+
         except yaml.YAMLError as exc:
             print(exc)
 
@@ -114,7 +114,7 @@ if __name__ == "__main__":
 
     if problem_type == "normal":
         autocoarsen = False
-        input_channels = 9
+        input_channels = 11
     elif problem_type == "autocoarsen":
         autocoarsen = True
         input_channels = 1
@@ -139,6 +139,8 @@ if __name__ == "__main__":
             ensemble_size=ensemble_size,
             CLtype=CLtype,
             content_loss_weight=content_loss_weight)
+
+        print("Model setup!")
 
         batch_gen_train, data_gen_valid = setupdata.setup_data(
             train_years=train_years,

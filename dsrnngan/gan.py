@@ -221,6 +221,7 @@ class WGANGP(object):
                 sample = outputs["output"]
 
                 condconst = [cond, const]
+
                 if self.ensemble_size is None:
                     gt_outputs = [gen_target]
                     noise_list = [noise_gen()]
@@ -258,6 +259,7 @@ class WGANGP(object):
                 loss_log["disc_loss_fake"] = disc_loss[2]
                 loss_log["disc_loss_gp"] = disc_loss[3]
                 loss_log["gen_loss_total"] = gen_loss[0]
+
                 if self.ensemble_size is not None:
                     loss_log["gen_loss_disc"] = gen_loss[1]
                     loss_log["gen_loss_ct"] = gen_loss[2]

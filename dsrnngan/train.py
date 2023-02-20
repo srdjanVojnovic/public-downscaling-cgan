@@ -1,5 +1,8 @@
 import noise
 import plots
+import sys
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def train_model(*,
@@ -24,6 +27,7 @@ def train_model(*,
     if mode == 'GAN':
         noise_shape = (img_shape[0], img_shape[1], noise_channels)
         noise_gen = noise.NoiseGenerator(noise_shape, batch_size=batch_size)
+
         loss_log = model.train(batch_gen_train, noise_gen,
                                steps_per_checkpoint, training_ratio=5)
 

@@ -14,21 +14,23 @@ ds_fac = read_config.read_downscaling_factor()["downscaling_factor"]
 
 
 def DataGenerator(year, batch_size, repeat=True, autocoarsen=False, weights=None):
-    return create_mixed_dataset(year, batch_size, repeat=repeat, autocoarsen=autocoarsen, weights=weights)
+    ds = create_mixed_dataset(year, batch_size, repeat=repeat, autocoarsen=autocoarsen, weights=weights)
+    return ds
 
 
 def create_mixed_dataset(year,
                          batch_size,
-                         fcst_shape=(20, 20, 9),
-                         con_shape=(200, 200, 2),
-                         out_shape=(200, 200, 1),
+                         fcst_shape=(10, 10, 11),
+                         con_shape=(60, 60, 2),
+                         out_shape=(60, 60, 1),
                          repeat=True,
                          autocoarsen=False,
                          folder=records_folder,
-                         shuffle_size=1024,
+                         shuffle_size=720,
                          weights=None):
 
-    classes = 4
+    # classes = 4
+    classes = 1
     if weights is None:
         weights = [1./classes]*classes
     datasets = [create_dataset(year,
@@ -63,16 +65,15 @@ def _dataset_autocoarsener(inputs, outputs):
 
 
 def _parse_batch(record_batch,
-                 insize=(20, 20, 9),
-                 consize=(200, 200, 2),
-                 outsize=(200, 200, 1)):
+                 insize=(10, 10, 11),
+                 consize=(60, 60, 2),
+                 outsize=(60, 60, 1)):
     # Create a description of the features
     feature_description = {
         'generator_input': tf.io.FixedLenFeature(insize, tf.float32),
         'constants': tf.io.FixedLenFeature(consize, tf.float32),
         'generator_output': tf.io.FixedLenFeature(outsize, tf.float32),
     }
-
     # Parse the input `tf.Example` proto using the dictionary above
     example = tf.io.parse_example(record_batch, feature_description)
     return ({'lo_res_inputs': example['generator_input'],
@@ -82,23 +83,30 @@ def _parse_batch(record_batch,
 
 def create_dataset(year,
                    clss,
-                   fcst_shape=(20, 20, 9),
-                   con_shape=(200, 200, 2),
-                   out_shape=(200, 200, 1),
+                   fcst_shape=(10, 10, 11),
+                   con_shape=(60, 60, 2),
+                   out_shape=(60, 60, 1),
                    folder=records_folder,
-                   shuffle_size=1024,
+                   shuffle_size=720,
                    repeat=True):
     AUTOTUNE = tf.data.experimental.AUTOTUNE
-    if isinstance(year, (str, int)):
-        fpattern = os.path.join(folder, f"{year}_*.{clss}.tfrecords")
-        fl = glob.glob(fpattern)
-    elif isinstance(year, list):
-        fl = []
-        for y in year:
-            fpattern = os.path.join(folder, f"{y}_*.{clss}.tfrecords")
-            fl += glob.glob(fpattern)
-    else:
-        assert False, f"TFRecords not configure for type {type(year)}"
+    # if isinstance(year, (str, int)):
+    #     fpattern = "../data/tfrecords/test.tfrecords"
+    #     # fpattern = os.path.join(folder, f"{year}_*.{clss}.tfrecords")
+    #     fl = glob.glob(fpattern)
+    #     print(fl)
+    # elif isinstance(year, list):
+    #     fl = []
+    #     # for y in year:
+    #     #     # fpattern = os.path.join(folder, f"{y}_*.{clss}.tfrecords")
+    #     #     fl += glob.glob(fpattern)
+    #     f1 = glob.glob(fpattern)
+    # else:
+    #     assert False, f"TFRecords not configure for type {type(year)}"
+    fpattern = "../data/tfrecords/test.tfrecords"
+    fl = []
+    fl += glob.glob(fpattern)
+    fl = glob.glob(fpattern)
     files_ds = tf.data.Dataset.list_files(fl)
     ds = tf.data.TFRecordDataset(files_ds,
                                  num_parallel_reads=AUTOTUNE)
@@ -107,6 +115,7 @@ def create_dataset(year,
                                        insize=fcst_shape,
                                        consize=con_shape,
                                        outsize=out_shape))
+
     if repeat:
         return ds.repeat()
     else:
@@ -118,9 +127,9 @@ def create_fixed_dataset(year=None,
                          mode='validation',
                          batch_size=16,
                          autocoarsen=False,
-                         fcst_shape=(20, 20, 9),
-                         con_shape=(200, 200, 2),
-                         out_shape=(200, 200, 1),
+                         fcst_shape=(10, 10, 11),
+                         con_shape=(60, 60, 2),
+                         out_shape=(60, 60, 1),
                          name=None,
                          folder=records_folder):
     assert year is not None or name is not None, "Must specify year or file name"

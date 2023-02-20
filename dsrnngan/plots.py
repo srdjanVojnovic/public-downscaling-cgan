@@ -1,7 +1,8 @@
 import os
 import pickle
+import sys
 
-import cartopy.crs as ccrs
+# import cartopy.crs as ccrs
 import matplotlib as mpl
 import numpy as np
 import seaborn as sns
@@ -44,7 +45,7 @@ def plot_img_log_coastlines(img, value_range_precip=(0.01, 5), cmap='viridis', e
                cmap=cmap,
                origin='lower',
                extent=extent,
-               transform=ccrs.PlateCarree(),
+               # transform=ccrs.PlateCarree(),
                alpha=alpha)
     plt.gca().tick_params(left=False, bottom=False,
                           labelleft=False, labelbottom=False)
@@ -93,13 +94,24 @@ def plot_sequences(gen,
             for ii in range(ens_size):
                 noise_shape = cond[0, ..., 0].shape + (noise_channels,)
                 noise_gen = NoiseGenerator(noise_shape, batch_size=batch_size)
+                print(cond.shape)
+                print(const.shape)
+                print(noise_gen().shape)
+                print(type(cond))
+                print(type(const))
+                print(type(noise_gen()))
                 seq_gen.append(gen.predict([cond, const, noise_gen()]))
+                y = seq_gen[ii][0].reshape((60, 60))
+                print(y[y > 0])
         elif mode == 'det':
             for ii in range(ens_size):
-                seq_gen.append(gen.predict([cond, const]))
+                # seq_gen.append(gen.predict([cond, const]))
+                seq_gen.append(gen.predict([cond]))
+
         elif mode == 'VAEGAN':
             # call encoder
-            mean, logvar = gen.encoder([cond, const])
+            # mean, logvar = gen.encoder([cond, const])
+            mean, logvar = gen.encoder([cond])
             # run decoder n times
             for ii in range(ens_size):
                 noise_shape = cond[0, ..., 0].shape + (latent_variables,)
@@ -504,8 +516,8 @@ def plot_preds(pred_files,
                 label = 'GAN'
             else:
                 label = 'VAEGAN'
-            plt.subplot(gs[(spacing*i):(spacing+spacing*i), (spacing*k):(spacing+spacing*k)],
-                        projection=ccrs.PlateCarree())
+            plt.subplot(gs[(spacing*i):(spacing+spacing*i), (spacing*k):(spacing+spacing*k)])
+                        # projection=ccrs.PlateCarree())
             ax = plt.gca()
             ax.coastlines(resolution='10m', color='black', linewidth=linewidth)
             if i < (len(preds_to_plot)):
@@ -570,8 +582,8 @@ def plot_comparison(files,
 
     for k in range(num_samples):
         for i in range(num_rows):
-            plt.subplot(gs[(spacing*i):(spacing+spacing*i), (spacing*k):(spacing+spacing*k)],
-                        projection=ccrs.PlateCarree())
+            plt.subplot(gs[(spacing*i):(spacing+spacing*i), (spacing*k):(spacing+spacing*k)])
+                        # projection=ccrs.PlateCarree())
             ax = plt.gca()
             ax.coastlines(resolution='10m', color='black', linewidth=linewidth)
             if i == 0:  # plot IFS

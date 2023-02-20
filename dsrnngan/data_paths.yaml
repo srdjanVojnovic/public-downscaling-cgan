@@ -1,11 +1,11 @@
 LOCATION1:
     GENERAL:
-        RADAR_PATH: '/path/to/radar/data'
-        FORECAST_PATH: '/path/to/forecast/data'
-        CONSTANTS_PATH: '/path/to/constants/data'
+        RADAR_PATH: '../data'
+        FORECAST_PATH: '../data'
+        CONSTANTS_PATH: '../data'
 
     TFRecords:
-        tfrecords_path: '/path/to/tfrecords/folder'
+        tfrecords_path: '../data/tfrecords'
 
 
 LOCATION2:
