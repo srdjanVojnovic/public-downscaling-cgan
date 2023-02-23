@@ -96,8 +96,15 @@ def plot_sequences(gen,
                 noise_gen = NoiseGenerator(noise_shape, batch_size=batch_size)
                 seq_gen.append(gen.predict([cond, const, noise_gen()]))
                 y = seq_gen[ii][0].reshape((60, 60))
+                plt.figure()
+                plt.imshow(outputs)
+                plt.savefig("real.png")
+                plt.close()
+
+                plt.figure()
                 plt.imshow(y)
-                plt.savefig("test.png")
+                plt.savefig("gen.png")
+                plt.close()
 
         elif mode == 'det':
             for ii in range(ens_size):
