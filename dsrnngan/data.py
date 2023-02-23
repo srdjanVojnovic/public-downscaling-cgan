@@ -8,7 +8,6 @@ import xarray as xr
 import read_config
 from datetime import datetime as dt
 
-
 data_paths = read_config.get_data_paths()
 RADAR_PATH = data_paths["GENERAL"]["RADAR_PATH"]
 FCST_PATH = data_paths["GENERAL"]["FORECAST_PATH"]
@@ -164,11 +163,12 @@ def load_fcst(ifield, date, hour, log_precip=False, norm=False):
     y = data[2:62, 2:62].coarsen({"grid_latitude": 6, "grid_longitude": 6}).mean().data
     data.close()
     ds.close()
-    return y
-    if field in ['tp', 'cp', 'pr', 'prl', 'prc']:
+
+    if field == 'psl':
+        return (y - y.mean()) / y.std()
+    else:
         # print('pass')
-        y[y < 0] = 0.
-        y = 1000*y
+        return y / y.max()
     if log_precip and field in ['tp', 'cp', 'pr', 'prc', 'prl']:
         # precip is measured in metres, so multiply up
         return np.log10(1+y)  # *1000)

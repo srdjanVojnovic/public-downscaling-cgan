@@ -94,15 +94,11 @@ def plot_sequences(gen,
             for ii in range(ens_size):
                 noise_shape = cond[0, ..., 0].shape + (noise_channels,)
                 noise_gen = NoiseGenerator(noise_shape, batch_size=batch_size)
-                print(cond.shape)
-                print(const.shape)
-                print(noise_gen().shape)
-                print(type(cond))
-                print(type(const))
-                print(type(noise_gen()))
                 seq_gen.append(gen.predict([cond, const, noise_gen()]))
                 y = seq_gen[ii][0].reshape((60, 60))
-                print(y[y > 0])
+                plt.imshow(y)
+                plt.savefig("test.png")
+
         elif mode == 'det':
             for ii in range(ens_size):
                 # seq_gen.append(gen.predict([cond, const]))

@@ -22,8 +22,8 @@ DISCRIMINATOR:
 TRAIN:
     train_years: [1900]
     training_weights: [1.0]  # frequency to sample from each bin
-    num_samples: 160000  # total generator training samples
-    steps_per_checkpoint: 3200  # number of batches per checkpoint save
+    num_samples: 512  # total generator training samples
+    steps_per_checkpoint: 16  # number of batches per checkpoint save
     batch_size: 2  # we could use 16 without CL, or 2 with CL
     kl_weight: 1e-8  # used for VAEGAN
     ensemble_size: 8  # size of ensemble for content loss; use null to turn off

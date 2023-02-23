@@ -49,5 +49,5 @@ def train_model(*,
                          num_cases=num_cases,  # number of examples to plot
                          ens_size=4,  # number of ensemble members to draw for each example
                          out_fn=plot_fn)
-
+                        
     return loss_log
