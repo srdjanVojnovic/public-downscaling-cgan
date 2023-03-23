@@ -103,7 +103,7 @@ def create_dataset(year,
     #     f1 = glob.glob(fpattern)
     # else:
     #     assert False, f"TFRecords not configure for type {type(year)}"
-    fpattern = "../data/tfrecords/test.tfrecords"
+    fpattern = "../data/tfrecords/train.tfrecords"
     fl = []
     fl += glob.glob(fpattern)
     fl = glob.glob(fpattern)

@@ -3,17 +3,16 @@ import numpy as np
 from datetime import datetime as dt
 import netCDF4 as nc
 import xarray
-import tensorflow_datasets as tfds
 import tensorflow as tf
 import os
 import shutil
 import glob
-import plotly.express as px
 import sys
 
 def convert_to_datetime(ds):
     conversion = []
     for x in ds['time_bnds'].data:
+        print(x[0].day)
         x1 = dt.timestamp(dt.strptime(str(x[0]), '%Y-%m-%d %H:%M:%S'))
         x2 = dt.timestamp(dt.strptime(str(x[1]), '%Y-%m-%d %H:%M:%S'))
         conversion.append(np.array([x1, x2]))
@@ -42,9 +41,9 @@ def load_nc_dir_with_generator(dir_):
 
 
 def get_nc(dir_):
-    ds = xarray.open_dataset(dir_ + "/" + "precip_combined.nc", engine='netcdf4')
-    dataarray = xarray.DataArray(convert_to_datetime(ds), coords={'time': ds['time'].values}, dims=['time', 'bnds'])
-    ds['time_bnds'] = dataarray
+    ds = xarray.open_dataset(dir_ + "/" + "train.nc", engine='netcdf4')
+    # dataarray = xarray.DataArray(convert_to_datetime(ds), coords={'time': ds['time'].values}, dims=['time', 'bnds'])
+    # ds['time_bnds'] = dataarray
     return ds
 
 
@@ -55,10 +54,13 @@ def combine_nc():
     print(len(ds))
 
 def build_generator_input(ds, i):
+    max = 0.0027274378
     generator_input = []
     columns = ['psl', 'temp250', 'temp500', 'temp700', 'temp850', 'temp925', 'vorticity250', 'vorticity500', 'vorticity700', 'vorticity850', 'vorticity925']
     for column in columns:
-        generator_input.append(ds[column][i][2:62, 2:62].coarsen({"grid_latitude": 6, "grid_longitude": 6}).mean().data)
+        y = ds[column][i][2:62, 2:62].coarsen({"grid_latitude": 6, "grid_longitude": 6}).mean().data
+        y = (max / (y.max() - y.min())) * (y - y.max()) + max # (y - y.min()) / (y.max() - y.min())
+        generator_input.append(y)
     return np.transpose(np.array(generator_input))
 
 
@@ -73,7 +75,7 @@ def load_nc_dir_cached_to_tfrecord(dir_, tf_path):
 
     """
     # generator_tfds = load_nc_dir_with_generator(dir_)
-    writer = tf.io.TFRecordWriter(tf_path + "/" + "test.tfrecords")
+    writer = tf.io.TFRecordWriter(tf_path + "/" + "train.tfrecords")
     ds = get_nc(dir_)
     # for i in range(len(ds['target_pr'].data)):
     #     record_bytes = tf.train.Example(features=tf.train.Features(feature={
@@ -87,13 +89,16 @@ def load_nc_dir_cached_to_tfrecord(dir_, tf_path):
     #     }))
 
     for i in range(len(ds['target_pr'].data)):
+        y = ds['target_pr'].data[i][2:62, 2:62].reshape(-1)
+        # y = (y - y.min()) / (y.max() - y.min())
+        # y = np.log10(1+y)
         record_bytes = tf.train.Example(features=tf.train.Features(feature={
             "generator_input": tf.train.Feature(
                 float_list=tf.train.FloatList(value=build_generator_input(ds, i).reshape(-1))),
             "constants": tf.train.Feature(
                 float_list=tf.train.FloatList(value=np.zeros((60, 60, 2)).reshape(-1))),
             "generator_output": tf.train.Feature(
-                float_list=tf.train.FloatList(value=ds['target_pr'].data[i][2:62, 2:62].reshape(-1))
+                float_list=tf.train.FloatList(value=y)
             )
         }))
         writer.write(record_bytes.SerializeToString())
@@ -126,13 +131,13 @@ def _parse_tfr_element(element):
 
 
 def get_ds(dir_):
-    ds = xarray.open_dataset(dir_ + "/" + "precip_combined.nc", engine='netcdf4')
+    ds = xarray.open_dataset(dir_ + "/" + "train.nc", engine='netcdf4')
     return ds
 
 
 def check_conversion(dir_):
     ds = get_ds(dir_)
-    tfr_dataset = tf.data.TFRecordDataset(dir_ + "/" + "tfrecords" + "/" + "test.tfrecords")
+    tfr_dataset = tf.data.TFRecordDataset(dir_ + "/" + "tfrecords" + "/" + "train.tfrecords")
     dataset = tfr_dataset.map(_parse_tfr_element)
     i = 0
     for instance in dataset:

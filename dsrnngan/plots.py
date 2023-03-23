@@ -86,6 +86,13 @@ def plot_sequences(gen,
         cond = inputs['lo_res_inputs']
         const = inputs['hi_res_inputs']
         seq_real = outputs['output']
+        print(cond.shape)
+        print(const.shape)
+
+        plt.figure()
+        plt.imshow(seq_real.reshape((60, 60)))
+        plt.savefig("pictures/real_" + str(kk) + ".png")
+        plt.close()
 
         seq_gen = []
         batch_size = cond.shape[0]
@@ -95,15 +102,13 @@ def plot_sequences(gen,
                 noise_shape = cond[0, ..., 0].shape + (noise_channels,)
                 noise_gen = NoiseGenerator(noise_shape, batch_size=batch_size)
                 seq_gen.append(gen.predict([cond, const, noise_gen()]))
+                print(seq_gen[ii].max())
+                print(seq_gen[ii].min())
                 y = seq_gen[ii][0].reshape((60, 60))
-                plt.figure()
-                plt.imshow(outputs)
-                plt.savefig("real.png")
-                plt.close()
 
                 plt.figure()
                 plt.imshow(y)
-                plt.savefig("gen.png")
+                plt.savefig("pictures/gen_" + str(kk) + "_" + str(ii)+ ".png")
                 plt.close()
 
         elif mode == 'det':
@@ -121,9 +126,9 @@ def plot_sequences(gen,
                 noise_gen = NoiseGenerator(noise_shape, batch_size=batch_size)
                 seq_gen.append(gen.decoder.predict([mean, logvar, noise_gen(), const]))
 
-        seq_real = data.denormalise(seq_real)
-        cond = data.denormalise(cond)
-        seq_gen = [data.denormalise(seq) for seq in seq_gen]
+        # seq_real = data.denormalise(seq_real)
+        # cond = data.denormalise(cond)
+        # seq_gen = [data.denormalise(seq) for seq in seq_gen]
 
         plt.subplot(gs[kk, 0])
         plot_img(seq_real[0, :, :], value_range=value_range)

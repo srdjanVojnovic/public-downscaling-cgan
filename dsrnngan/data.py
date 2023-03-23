@@ -7,6 +7,7 @@ import xarray as xr
 
 import read_config
 from datetime import datetime as dt
+import sys
 
 data_paths = read_config.get_data_paths()
 RADAR_PATH = data_paths["GENERAL"]["RADAR_PATH"]
@@ -37,7 +38,7 @@ def get_dates(year):
     """
     from glob import glob
     # file_paths = os.path.join(RADAR_PATH, str(year), "*.nc")
-    file_paths = "../data/precip_combined.nc"
+    file_paths = "../data/train.nc"
     files = glob(file_paths)
     dates = []
     for f in files:
@@ -50,7 +51,7 @@ def get_dates(year):
 def load_radar(date, hour, log_precip=False, aggregate=1):
     # year = date[:4]
     # data_path = os.path.join(RADAR_PATH, year, f"metoffice-c-band-rain-radar_uk_{date}.nc")
-    data = xr.open_dataset("../data/precip_combined.nc")
+    data = xr.open_dataset("../data/train.nc")
     assert hour+aggregate < 25
     # y = np.array(data['unknown'][hour:hour+aggregate, :, :]).sum(axis=0)
     y = data["target_pr"][np.where(data["target_pr"]['time'].data == date)[0][0]][2:62, 2:62].data
@@ -58,6 +59,8 @@ def load_radar(date, hour, log_precip=False, aggregate=1):
     data.close()
     # The remapping of the NIMROD radar left a few negative numbers, so remove those
     y[y < 0.0] = 0.0
+    return y
+    # return (y - y.min()) / (y.max() - y.min())
     if log_precip:
         return np.log10(1+y)
     else:
@@ -72,7 +75,7 @@ def logprec(y, log_precip=True):
 
 def load_hires_constants(batch_size=1):
     # oro_path = os.path.join(CONSTANTS_PATH, "orography.nc")
-    oro_path = "../data/precip_combined.nc"
+    oro_path = "../data/train.nc"
     df = xr.load_dataset(oro_path)
     # LSM is already 0:1
     lsm = np.array(df['psl']) # NOT RIGHT
@@ -86,8 +89,8 @@ def load_hires_constants(batch_size=1):
 
     df.close()
     # print(z.shape, lsm.shape)
-
-    return np.array([np.repeat(np.stack([z, lsm], -1), batch_size, axis=0)])
+    print(np.repeat(np.array([np.stack([z, lsm], -1)]), batch_size, axis = 0).shape)
+    return np.repeat(np.array([np.stack([z, lsm], -1)]), batch_size, axis = 0)
 
 
 def load_fcst_radar_batch(batch_dates, fcst_fields=all_fcst_fields, log_precip=False,
@@ -110,16 +113,23 @@ def load_fcst_radar_batch(batch_dates, fcst_fields=all_fcst_fields, log_precip=F
         batch_x.append(load_fcst_stack(fcst_fields, date, h, log_precip=log_precip, norm=norm))
         batch_y.append(load_radar(date, h, log_precip=log_precip))
 
+    print(constants)
+
     if (not constants):
         return np.array(batch_x), np.array(batch_y)
     else:
+        print(np.array(batch_x).shape)
+        print(np.array(batch_y).shape)
+        print(load_hires_constants(len(batch_dates)).shape)
+        print("CHECKKK")
+        sys.exit(1)
         return [np.array(batch_x), load_hires_constants(len(batch_dates))], np.array(batch_y)
 
 # CHANGE
 def load_fcst(ifield, date, hour, log_precip=False, norm=False):
     # Get the time required (compensating for IFS forecast saving precip at the end of the timestep)
     # time = datetime(year=int(date[:4]), month=int(date[4:6]), day=int(date[6:8]), hour=hour) + timedelta(hours=1)
-    hour = 12
+    # hour = 12
     # Get the correct forecast starttime
     # if time.hour < 6:
     #     tmpdate = time - timedelta(days=1)
@@ -150,19 +160,23 @@ def load_fcst(ifield, date, hour, log_precip=False, norm=False):
         fleheader = 'sfc'
 
     # ds_path = os.path.join(FCST_PATH, f"{fleheader}_{loaddata_str}.nc")
-    ds = xr.open_dataset("../data/precip_combined.nc")
+    ds = xr.open_dataset("../data/train.nc")
     data = ds[field][np.where(ds[field]['time'].data == date)[0][0]]
     field = ifield
     if field in ['tp', 'cp', 'cdir', 'tisr']:
         # data = data[time_index, :, :] - data[time_index-1, :, :]
         print("Skip")
-    else:
+    # else:
         # data = data[time_index, :, :]
-        print("Skip")
+    #    print("Skip")
 
     y = data[2:62, 2:62].coarsen({"grid_latitude": 6, "grid_longitude": 6}).mean().data
     data.close()
     ds.close()
+    
+    max = 0.0027274378
+    y = (max / (y.max() - y.min())) * (y - y.max()) + max # (y - y.min()) / (y.max() - y.min())
+    return y
 
     if field == 'psl':
         return (y - y.mean()) / y.std()
