@@ -165,7 +165,7 @@ class WGANGP(object):
             self.disc_trainer.summary()
 
     def train(self, batch_gen, noise_gen, num_gen_batches=1,
-              training_ratio=1, show_progress=True):
+              training_ratio=5, show_progress=True):
 
         disc_target_real = None
         for inputs, _ in batch_gen.take(1).as_numpy_iterator():
@@ -210,6 +210,13 @@ class WGANGP(object):
                     disc_loss += np.array(dl)
                 disc_loss_n += 1
 
+                # generated = self.gen([np.array([cond[0]]), np.array([const[0]]), np.array([noise_gen()[0]])])
+                # print(wasserstein_loss(sample[0], generated))
+                
+                # if len(generated[generated < 0].numpy()) > 0:
+                #     print(generated[generated < 0])
+                #     print(sample[sample < 0])
+                # print(self.disc([np.array([cond[0]]), np.array([const[0]]), generated]))
                 del sample, cond, const
 
             disc_loss /= disc_loss_n
@@ -221,6 +228,7 @@ class WGANGP(object):
                 sample = outputs["output"]
 
                 condconst = [cond, const]
+
                 if self.ensemble_size is None:
                     gt_outputs = [gen_target]
                     noise_list = [noise_gen()]
@@ -258,6 +266,7 @@ class WGANGP(object):
                 loss_log["disc_loss_fake"] = disc_loss[2]
                 loss_log["disc_loss_gp"] = disc_loss[3]
                 loss_log["gen_loss_total"] = gen_loss[0]
+
                 if self.ensemble_size is not None:
                     loss_log["gen_loss_disc"] = gen_loss[1]
                     loss_log["gen_loss_ct"] = gen_loss[2]

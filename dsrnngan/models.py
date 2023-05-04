@@ -9,7 +9,7 @@ from blocks import residual_block, const_upscale_block
 def generator(mode,
               arch,
               downscaling_steps,
-              input_channels=9,
+              input_channels=11,
               latent_variables=1,
               noise_channels=8,
               filters_gen=64,

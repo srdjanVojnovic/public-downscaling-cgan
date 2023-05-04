@@ -15,6 +15,8 @@ import setupdata
 import setupmodel
 import train
 
+from create_xarray import create_xarray
+
 
 if __name__ == "__main__":
     read_config.set_gpu_mode()  # set up whether to use GPU, and mem alloc mode
@@ -52,7 +54,7 @@ if __name__ == "__main__":
     with open(config_path, 'r') as f:
         try:
             setup_params = yaml.safe_load(f)
-            print(setup_params)
+
         except yaml.YAMLError as exc:
             print(exc)
 
@@ -114,7 +116,7 @@ if __name__ == "__main__":
 
     if problem_type == "normal":
         autocoarsen = False
-        input_channels = 9
+        input_channels = 11
     elif problem_type == "autocoarsen":
         autocoarsen = True
         input_channels = 1
@@ -140,6 +142,8 @@ if __name__ == "__main__":
             CLtype=CLtype,
             content_loss_weight=content_loss_weight)
 
+        print("Model setup!")
+
         batch_gen_train, data_gen_valid = setupdata.setup_data(
             train_years=train_years,
             val_years=val_years,
@@ -150,7 +154,7 @@ if __name__ == "__main__":
         if args.restart:  # load weights and run status
 
             model.load(model.filenames_from_root(model_weights_root))
-            with open(log_folder + "-run_status.json", 'r') as f:
+            with open(log_folder + "run_status.json", 'r') as f: # CHANGED THIS THINK IT'S A BUG
                 run_status = json.load(f)
             training_samples = run_status["training_samples"]
             checkpoint = int(training_samples / (steps_per_checkpoint * batch_size)) + 1
@@ -250,3 +254,6 @@ if __name__ == "__main__":
 
     if args.plot_ranks:
         plots.plot_histograms(log_folder, val_years, ranks=ranks_to_save, N_ranks=11)
+
+    # ADDED
+    create_xarray(model.gen, data_gen_valid, noise_channels=noise_channels, num_cases=4320)

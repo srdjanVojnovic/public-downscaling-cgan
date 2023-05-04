@@ -1,7 +1,8 @@
 import os
 import pickle
+import sys
 
-import cartopy.crs as ccrs
+# import cartopy.crs as ccrs
 import matplotlib as mpl
 import numpy as np
 import seaborn as sns
@@ -44,7 +45,7 @@ def plot_img_log_coastlines(img, value_range_precip=(0.01, 5), cmap='viridis', e
                cmap=cmap,
                origin='lower',
                extent=extent,
-               transform=ccrs.PlateCarree(),
+               # transform=ccrs.PlateCarree(),
                alpha=alpha)
     plt.gca().tick_params(left=False, bottom=False,
                           labelleft=False, labelbottom=False)
@@ -57,6 +58,70 @@ def truncate_colourmap(cmap, minval=0.0, maxval=1.0, n=100):
     return new_cmap
 
 
+def crps_ensemble(observation, forecasts):
+
+    fc = forecasts.copy()
+    fc.sort(axis=-1)
+    obs = observation
+    fc_below = fc < obs[..., None]
+    crps = np.zeros_like(obs)
+
+    for i in range(fc.shape[-1]):
+        below = fc_below[..., i]
+        weight = ((i+1)**2 - i**2) / fc.shape[-1]**2
+        crps[below] += weight * (obs[below]-fc[..., i][below])
+
+    for i in range(fc.shape[-1] - 1, -1, -1):
+        above = ~fc_below[..., i]
+        k = fc.shape[-1] - 1 - i
+        weight = ((k+1)**2 - k**2) / fc.shape[-1]**2
+        crps[above] += weight * (fc[..., i][above] - obs[above])
+
+    return crps
+
+def generateBinaryFields(generated, real, threshold):
+    """
+    Compute binary fields for generated and real data using a given threshold.
+
+    Parameters:
+        generated (ndarray): Array of generated data.
+        real (ndarray): Array of true data.
+        threshold (float): Threshold value for binarization.
+
+    Returns:
+        tuple: Tuple containing binary fields for generated and real data.
+    """
+    binary_real = (real >= threshold).astype(int)
+    binary_generated = (generated >= threshold).astype(int)
+    return binary_generated, binary_real
+
+def fractions_generator(I, n):
+    N_x, N_y = I.shape
+    O_n = np.zeros((N_x - n + 1, N_y - n + 1))
+    for i in range(N_x - n + 1):
+        for j in range(N_y - n + 1):
+            O_n[i, j] = np.sum(I[i:i + n, j:j + n]) / (n**2)
+            
+    return O_n
+
+def MSE(O_n, M_n):
+    N_x, N_y = O_n.shape
+    mse_n = np.sum((O_n - M_n)**2)/(N_x*N_y)
+    return mse_n
+
+def MSE_ref(O_n, M_n):
+    N_x, N_y = O_n.shape
+    mse_n_ref = (np.sum(O_n**2) + np.sum(M_n**2))/(N_x*N_y)
+    return mse_n_ref
+
+def FSS(O_n, M_n):
+    N_x, N_y = O_n.shape
+    mse_n = np.sum((O_n - M_n)**2)/(N_x*N_y)
+    mse_n_ref = (np.sum(O_n**2) + np.sum(M_n**2))/(N_x*N_y)
+    mse_n_perfect = np.sum((O_n - O_n.mean())**2)/(N_x*N_y)
+    fss_n = 1 - mse_n/mse_n_ref
+    return fss_n
+
 def plot_sequences(gen,
                    mode,
                    data_gen,
@@ -65,7 +130,8 @@ def plot_sequences(gen,
                    latent_variables,
                    num_cases,
                    ens_size=4,
-                   out_fn=None):
+                   out_fn=None,
+                   disc=None):
 
     data_gen_iter = iter(data_gen)
 
@@ -79,12 +145,25 @@ def plot_sequences(gen,
                            wspace=0.05, hspace=0.05)
 
     value_range = (0, 5)
+    real = []
+    generated = []
+    crps = []
+    fss = []
 
+    pictures = 0
     for kk in range(num_cases):
+        pictures += 1
         inputs, outputs = next(data_gen_iter)
         cond = inputs['lo_res_inputs']
         const = inputs['hi_res_inputs']
         seq_real = outputs['output']
+
+        real.append(seq_real.reshape(60, 60))
+
+        # plt.figure()
+        # plt.imshow(seq_real.reshape((60, 60)))
+        # plt.savefig("pictures/real_" + str(kk) + ".png")
+        # plt.close()
 
         seq_gen = []
         batch_size = cond.shape[0]
@@ -94,35 +173,102 @@ def plot_sequences(gen,
                 noise_shape = cond[0, ..., 0].shape + (noise_channels,)
                 noise_gen = NoiseGenerator(noise_shape, batch_size=batch_size)
                 seq_gen.append(gen.predict([cond, const, noise_gen()]))
+                
+                y = seq_gen[ii][0].reshape((60, 60))
+                generated.append(y)
+
+                # plt.figure()
+                # plt.imshow(y)
+                # plt.savefig("pictures/gen_" + str(kk) + "_" + str(ii)+ ".png")
+                # plt.close()
+
         elif mode == 'det':
             for ii in range(ens_size):
-                seq_gen.append(gen.predict([cond, const]))
+                # seq_gen.append(gen.predict([cond, const]))
+                seq_gen.append(gen.predict([cond]))
+
         elif mode == 'VAEGAN':
             # call encoder
-            mean, logvar = gen.encoder([cond, const])
+            # mean, logvar = gen.encoder([cond, const])
+            mean, logvar = gen.encoder([cond])
             # run decoder n times
             for ii in range(ens_size):
                 noise_shape = cond[0, ..., 0].shape + (latent_variables,)
                 noise_gen = NoiseGenerator(noise_shape, batch_size=batch_size)
                 seq_gen.append(gen.decoder.predict([mean, logvar, noise_gen(), const]))
 
-        seq_real = data.denormalise(seq_real)
-        cond = data.denormalise(cond)
-        seq_gen = [data.denormalise(seq) for seq in seq_gen]
+        binary_generated, binary_real = generateBinaryFields(np.array(seq_gen[0]).reshape(60, 60) * 3600 * 24, seq_real.reshape(60, 60) * 3600 * 24, 3)
+        O_n = fractions_generator(binary_real, 3)
+        M_n = fractions_generator(binary_generated, 3)
+        mse_n = MSE(O_n, M_n)
+        mse_n_ref = MSE_ref(O_n, M_n)
+        fss.append(FSS(O_n, M_n))
 
-        plt.subplot(gs[kk, 0])
-        plot_img(seq_real[0, :, :], value_range=value_range)
-        plt.subplot(gs[kk, 1])
-        plot_img(cond[0, :, :, 0], value_range=value_range)
-        for ll in range(ens_size):
-            plt.subplot(gs[kk, ll+2])
-            plot_img(seq_gen[ll][0, :, :, 0], value_range=value_range)
+        crps.append(crps_ensemble(seq_real.reshape(60, 60), np.array(seq_gen).reshape((60, 60, 4))))
 
-    plt.suptitle('Checkpoint ' + str(checkpoint))
+        if pictures < 8:
+            seq_real = data.denormalise(seq_real)
+            seq_gen = [data.denormalise(seq) for seq in seq_gen]
+            fig, axs = plt.subplots(ncols=5, nrows=1, figsize=(24, 10))
 
-    if out_fn is not None:
-        plt.savefig(out_fn, bbox_inches='tight')
-        plt.close()
+            axs[0].imshow(seq_real.reshape(60, 60))
+            axs[0].set_title("Real Data")
+
+            for j in range(4):
+                axs[j+1].imshow(seq_gen[j].reshape(60, 60))
+                axs[j+1].set_title("Generated " + str(j + 1) + " Data")
+            plt.savefig("pictures/normal_example_" + str(pictures) + ".png")
+            plt.close()
+            
+
+    #     plt.subplot(gs[kk, 0])
+    #     plot_img(seq_real[0, :, :], value_range=value_range)
+    #     plt.subplot(gs[kk, 1])
+    #     plot_img(cond[0, :, :, 0], value_range=value_range)
+    #     for ll in range(ens_size):
+    #         plt.subplot(gs[kk, ll+2])
+    #         plot_img(seq_gen[ll][0, :, :, 0], value_range=value_range)
+
+    # plt.suptitle('Checkpoint ' + str(checkpoint))
+
+    # if out_fn is not None:
+    #     plt.savefig(out_fn, bbox_inches='tight')
+    #     plt.close()
+
+    # CRPS pixel-wise score:
+    crps = np.array(crps)
+    print("CRPS: " + str(crps.mean()))
+
+    print("FSS: " + str(np.array(fss).mean()))
+
+    fig, axs = plt.subplots(figsize = (12, 10))
+
+    original_images = np.array(real)
+
+    generated_images = np.array(generated)
+    # Flatten the image data into 1D arrays of pixel intensities
+    original_pixels = original_images.flatten()
+    generated_pixels = generated_images.flatten()
+
+    # Calculate the empirical distributions
+    original_quantiles = np.percentile(original_pixels, np.linspace(0, 100, 101))
+    generated_quantiles = np.percentile(generated_pixels, np.linspace(0, 100, 101))
+
+    # CHANGED FROM 100 TO 99
+    generated_range = np.percentile(generated_pixels, [0, 99])
+    generated_quantiles = generated_quantiles[(generated_quantiles >= generated_range[0]) & (generated_quantiles <= generated_range[1])]
+
+    # CHANGED FROM ORIGINAL_QUANTILES TO [:-1]
+    axs.plot(original_quantiles[:-1], generated_quantiles, 'o', c = 'b')
+    axs.plot([generated_range[0], generated_range[1]], [generated_range[0], generated_range[1]], 'r--')
+    axs.set_xlabel('Original Image Pixel Quantiles')
+    axs.set_ylabel('Generated Image Pixel Quantiles')
+    
+    plt.savefig("pictures/qq_normal/qq_last_" + str(checkpoint) + ".png")
+    plt.close()
+
+
+    
 
 
 def plot_rank_histogram(ax, ranks, N_ranks=101, **plot_params):
@@ -504,8 +650,8 @@ def plot_preds(pred_files,
                 label = 'GAN'
             else:
                 label = 'VAEGAN'
-            plt.subplot(gs[(spacing*i):(spacing+spacing*i), (spacing*k):(spacing+spacing*k)],
-                        projection=ccrs.PlateCarree())
+            plt.subplot(gs[(spacing*i):(spacing+spacing*i), (spacing*k):(spacing+spacing*k)])
+                        # projection=ccrs.PlateCarree())
             ax = plt.gca()
             ax.coastlines(resolution='10m', color='black', linewidth=linewidth)
             if i < (len(preds_to_plot)):
@@ -570,8 +716,8 @@ def plot_comparison(files,
 
     for k in range(num_samples):
         for i in range(num_rows):
-            plt.subplot(gs[(spacing*i):(spacing+spacing*i), (spacing*k):(spacing+spacing*k)],
-                        projection=ccrs.PlateCarree())
+            plt.subplot(gs[(spacing*i):(spacing+spacing*i), (spacing*k):(spacing+spacing*k)])
+                        # projection=ccrs.PlateCarree())
             ax = plt.gca()
             ax.coastlines(resolution='10m', color='black', linewidth=linewidth)
             if i == 0:  # plot IFS

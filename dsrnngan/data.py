@@ -6,14 +6,16 @@ import numpy as np
 import xarray as xr
 
 import read_config
-
+from datetime import datetime as dt
+import sys
 
 data_paths = read_config.get_data_paths()
 RADAR_PATH = data_paths["GENERAL"]["RADAR_PATH"]
 FCST_PATH = data_paths["GENERAL"]["FORECAST_PATH"]
 CONSTANTS_PATH = data_paths["GENERAL"]["CONSTANTS_PATH"]
 
-all_fcst_fields = ['tp', 'cp', 'sp', 'tisr', 'cape', 'tclw', 'tcwv', 'u700', 'v700']
+all_fcst_fields = ['psl', 'temp250', 'temp500', 'temp700', 'temp850', 'temp925', 'vorticity250', 'vorticity500', 'vorticity700', 'vorticity850', 'vorticity925']
+# all_fcst_fields = ['tp', 'cp', 'sp', 'tisr', 'cape', 'tclw', 'tcwv', 'u700', 'v700']
 fcst_hours = np.array(range(24))
 
 
@@ -23,29 +25,43 @@ def denormalise(x):
     """
     return np.minimum(10**x - 1, 500.0)
 
+def convert_dates(ds):
+    conversion = []
+    for x in ds['time'].data:
+        x1 = dt.strptime(str(x), '%Y-%m-%d %H:%M:%S')
+        conversion.append(x1)
+    return np.array(conversion)
 
 def get_dates(year):
     """
     Return dates where we have radar data
     """
     from glob import glob
-    file_paths = os.path.join(RADAR_PATH, str(year), "*.nc")
+    # file_paths = os.path.join(RADAR_PATH, str(year), "*.nc")
+    file_paths = "../data/val.nc"
     files = glob(file_paths)
     dates = []
     for f in files:
-        dates.append(f[:-3].split('_')[-1])
+        ds = xr.open_dataset(f, engine='netcdf4')
+        dates = ds['time'].data
+        # dates.append(f[:-3].split('_')[-1])
     return sorted(dates)
 
-
+# CHANGE
 def load_radar(date, hour, log_precip=False, aggregate=1):
-    year = date[:4]
-    data_path = os.path.join(RADAR_PATH, year, f"metoffice-c-band-rain-radar_uk_{date}.nc")
-    data = xr.open_dataset(data_path)
+    # year = date[:4]
+    # data_path = os.path.join(RADAR_PATH, year, f"metoffice-c-band-rain-radar_uk_{date}.nc")
+    data = xr.open_dataset("../data/val.nc")
     assert hour+aggregate < 25
-    y = np.array(data['unknown'][hour:hour+aggregate, :, :]).sum(axis=0)
+    # y = np.array(data['unknown'][hour:hour+aggregate, :, :]).sum(axis=0)
+    y = data["target_pr"][np.where(data["target_pr"]['time'].data == date)[0][0]][2:62, 2:62].data
+
     data.close()
     # The remapping of the NIMROD radar left a few negative numbers, so remove those
-    y[y < 0.0] = 0.0
+    # y[y < 0.0] = 0.0
+    y = y*3600
+    return np.log10(1+y)
+    # return (y - y.min()) / (y.max() - y.min())
     if log_precip:
         return np.log10(1+y)
     else:
@@ -58,21 +74,22 @@ def logprec(y, log_precip=True):
     else:
         return y
 
-
 def load_hires_constants(batch_size=1):
-    oro_path = os.path.join(CONSTANTS_PATH, "orography.nc")
+    # oro_path = os.path.join(CONSTANTS_PATH, "orography.nc")
+    oro_path = "../data/val.nc"
     df = xr.load_dataset(oro_path)
     # LSM is already 0:1
-    lsm = np.array(df['LSM'])
+    lsm = np.array(df['psl']) # NOT RIGHT
+    lsm = np.zeros((60, 60))
 
     # Orography.  Clip below, to remove spectral artifacts, and normalise by max
-    z = df['z'].data
+    z = df['vorticity850'].data # NOT RIGHT
     z[z < 5] = 5
     z = z/z.max()
+    z = np.zeros((60, 60))
 
     df.close()
-    # print(z.shape, lsm.shape)
-    return np.repeat(np.stack([z, lsm], -1), batch_size, axis=0)
+    return np.repeat(np.array([np.stack([z, lsm], -1)]), batch_size, axis = 0)
 
 
 def load_fcst_radar_batch(batch_dates, fcst_fields=all_fcst_fields, log_precip=False,
@@ -100,30 +117,30 @@ def load_fcst_radar_batch(batch_dates, fcst_fields=all_fcst_fields, log_precip=F
     else:
         return [np.array(batch_x), load_hires_constants(len(batch_dates))], np.array(batch_y)
 
-
+# CHANGE
 def load_fcst(ifield, date, hour, log_precip=False, norm=False):
     # Get the time required (compensating for IFS forecast saving precip at the end of the timestep)
-    time = datetime(year=int(date[:4]), month=int(date[4:6]), day=int(date[6:8]), hour=hour) + timedelta(hours=1)
-
+    # time = datetime(year=int(date[:4]), month=int(date[4:6]), day=int(date[6:8]), hour=hour) + timedelta(hours=1)
+    # hour = 12
     # Get the correct forecast starttime
-    if time.hour < 6:
-        tmpdate = time - timedelta(days=1)
-        loaddate = datetime(year=tmpdate.year, month=tmpdate.month, day=tmpdate.day, hour=18)
-        loadtime = '12'
-    elif 6 <= time.hour < 18:
-        tmpdate = time
-        loaddate = datetime(year=tmpdate.year, month=tmpdate.month, day=tmpdate.day, hour=6)
-        loadtime = '00'
-    elif 18 <= time.hour < 24:
-        tmpdate = time
-        loaddate = datetime(year=tmpdate.year, month=tmpdate.month, day=tmpdate.day, hour=18)
-        loadtime = '12'
-    else:
-        assert False, "Not acceptable time"
-    dt = time - loaddate
-    time_index = int(dt.total_seconds()//3600)
-    assert time_index >= 1, "Cannot use first hour of retrival"
-    loaddata_str = loaddate.strftime("%Y%m%d") + '_' + loadtime
+    # if time.hour < 6:
+    #     tmpdate = time - timedelta(days=1)
+    #     loaddate = datetime(year=tmpdate.year, month=tmpdate.month, day=tmpdate.day, hour=18)
+    #     loadtime = '12'
+    # elif 6 <= time.hour < 18:
+    #     tmpdate = time
+    #     loaddate = datetime(year=tmpdate.year, month=tmpdate.month, day=tmpdate.day, hour=6)
+    #     loadtime = '00'
+    # elif 18 <= time.hour < 24:
+    #     tmpdate = time
+    #     loaddate = datetime(year=tmpdate.year, month=tmpdate.month, day=tmpdate.day, hour=18)
+    #     loadtime = '12'
+    # else:
+    #     assert False, "Not acceptable time"
+    # dt = time - loaddate
+    # time_index = int(dt.total_seconds()//3600)
+    # assert time_index >= 1, "Cannot use first hour of retrival"
+    # loaddata_str = loaddate.strftime("%Y%m%d") + '_' + loadtime
 
     field = ifield
     if field in ['u700', 'v700']:
@@ -134,22 +151,37 @@ def load_fcst(ifield, date, hour, log_precip=False, norm=False):
     else:
         fleheader = 'sfc'
 
-    ds_path = os.path.join(FCST_PATH, f"{fleheader}_{loaddata_str}.nc")
-    ds = xr.open_dataset(ds_path)
-    data = ds[field]
+    # ds_path = os.path.join(FCST_PATH, f"{fleheader}_{loaddata_str}.nc")
+    ds = xr.open_dataset("../data/val.nc")
+    data = ds[field][np.where(ds[field]['time'].data == date)[0][0]]
     field = ifield
     if field in ['tp', 'cp', 'cdir', 'tisr']:
-        data = data[time_index, :, :] - data[time_index-1, :, :]
-    else:
-        data = data[time_index, :, :]
+        # data = data[time_index, :, :] - data[time_index-1, :, :]
+        print("Skip")
+    # else:
+        # data = data[time_index, :, :]
+    #    print("Skip")
 
-    y = np.array(data[:, :])
+    y = data[2:62, 2:62].coarsen({"grid_latitude": 6, "grid_longitude": 6}).mean().data
     data.close()
     ds.close()
-    if field in ['tp', 'cp', 'pr', 'prl', 'prc']:
+    
+    ds = xr.open_dataset("../data/train.nc")
+    maxValue = np.max(ds[field].data)
+    # max = 0.0027274378
+    # y = (max / (y.max() - y.min())) * (y - y.max()) + max # (y - y.min()) / (y.max() - y.min())
+    if field == 'target_pr':
+        y = np.log10(1 + (y * 3600))
+    else:
+        y = y / maxValue
+
+    return np.float32(y)
+
+    if field == 'psl':
+        return (y - y.mean()) / y.std()
+    else:
         # print('pass')
-        y[y < 0] = 0.
-        y = 1000*y
+        return y / y.max()
     if log_precip and field in ['tp', 'cp', 'pr', 'prc', 'prl']:
         # precip is measured in metres, so multiply up
         return np.log10(1+y)  # *1000)
@@ -165,7 +197,7 @@ def load_fcst_stack(fields, date, hour, log_precip=False, norm=False):
         field_arrays.append(load_fcst(f, date, hour, log_precip=log_precip, norm=norm))
     return np.stack(field_arrays, -1)
 
-
+# CHANGE
 def get_fcst_stats(field, year=2018):
     import datetime
 
@@ -198,7 +230,7 @@ def get_fcst_stats(field, year=2018):
     sd = (sd / nsamples)**0.5
     return mi, mx, mn, sd
 
-
+# CHANGE
 def gen_fcst_norm(year=2018):
 
     """
@@ -222,7 +254,7 @@ def gen_fcst_norm(year=2018):
         pickle.dump(stats_dic, f, 0)
     return
 
-
+# CHANGE
 def load_fcst_norm(year=2018):
     import pickle
     fcstnorm_path = os.path.join(CONSTANTS_PATH, f"FCSTNorm{year}.pkl")

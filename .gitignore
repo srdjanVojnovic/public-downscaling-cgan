@@ -1,3 +1,6 @@
+data/
+dsrnngan/pictures/
+
 jupyter/
 logs/
 test-det/
@@ -5,7 +8,8 @@ test-logs/
 *.pdf
 *.sh
 *.yaml
-
+*.png
+*.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

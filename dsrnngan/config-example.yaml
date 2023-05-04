@@ -1,13 +1,13 @@
 GENERAL:
     mode: "GAN"  # choices 'GAN', 'VAEGAN', 'det'
     problem_type: "normal"  # choices 'normal' (forecast to truth), 'autocoarsen' (coarsened truth to truth)
-    
+
 MODEL:
     architecture: "forceconv"  # choices 'normal', 'forceconv', 'forceconv-long'
     padding: "reflect"  # convolution padding: 'same', 'reflect', or 'symmetric'
-        
+
 SETUP:
-    log_folder: "/ppdata/lucy-cGAN/logs/IFS"
+    log_folder: "../logs/cGAN/last_full_diagnostics_normal/"
 
 GENERATOR:
     filters_gen: 128  # generator network width
@@ -20,19 +20,19 @@ DISCRIMINATOR:
     learning_rate_disc: 1e-5  # if training blows up, decrease this
 
 TRAIN:
-    train_years: [2016, 2017, 2018] 
-    training_weights: [0.4, 0.3, 0.2, 0.1]  # frequency to sample from each bin
-    num_samples: 160000  # total generator training samples
+    train_years: [1900]
+    training_weights: [1.0]  # frequency to sample from each bin
+    num_samples: 640000  # total generator training samples
     steps_per_checkpoint: 3200  # number of batches per checkpoint save
     batch_size: 2  # we could use 16 without CL, or 2 with CL
     kl_weight: 1e-8  # used for VAEGAN
-    ensemble_size: 8  # size of ensemble for content loss; use null to turn off
+    ensemble_size: null  # size of ensemble for content loss; use null to turn off
     CL_type: "ensmeanMSE"  # type of content loss to use: 'CRPS', 'CRPS_phys', 'ensmeanMSE', 'ensmeanMSE_phys'
-    content_loss_weight: 1000.0  # we used 1000 for ensmeanMSE, and 100 for CRPS
+    content_loss_weight: 0.0  # we used 1000 for ensmeanMSE, and 100 for CRPS
 
 VAL:
-    val_years: 2019  # year to draw validation data from (only used for progress.pdf)
-    val_size: 8  # number of examples to plot
+    val_years: 1984  # year to draw validation data from (only used for progress.pdf)
+    val_size: 256  # number of examples to plot
 
 EVAL:
     num_batches: 256  # number of full-image examples to evaluate on
