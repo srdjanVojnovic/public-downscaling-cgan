@@ -26,7 +26,7 @@ def create_mixed_dataset(year,
                          repeat=True,
                          autocoarsen=False,
                          folder=records_folder,
-                         shuffle_size=720,
+                         shuffle_size=1024,
                          weights=None):
 
     # classes = 4
@@ -45,8 +45,8 @@ def create_mixed_dataset(year,
     sampled_ds = tf.data.Dataset.sample_from_datasets(datasets,
                                                       weights=weights).batch(batch_size)
 
-    if autocoarsen:
-        sampled_ds = sampled_ds.map(_dataset_autocoarsener)
+    # if autocoarsen:
+    #     sampled_ds = sampled_ds.map(_dataset_autocoarsener)
     sampled_ds = sampled_ds.prefetch(2)
     return sampled_ds
 
@@ -76,6 +76,7 @@ def _parse_batch(record_batch,
     }
     # Parse the input `tf.Example` proto using the dictionary above
     example = tf.io.parse_example(record_batch, feature_description)
+
     return ({'lo_res_inputs': example['generator_input'],
              'hi_res_inputs': example['constants']},
             {'output': example['generator_output']})
@@ -87,7 +88,7 @@ def create_dataset(year,
                    con_shape=(60, 60, 2),
                    out_shape=(60, 60, 1),
                    folder=records_folder,
-                   shuffle_size=720,
+                   shuffle_size=1024,
                    repeat=True):
     AUTOTUNE = tf.data.experimental.AUTOTUNE
     # if isinstance(year, (str, int)):
@@ -103,7 +104,7 @@ def create_dataset(year,
     #     f1 = glob.glob(fpattern)
     # else:
     #     assert False, f"TFRecords not configure for type {type(year)}"
-    fpattern = "../data/tfrecords/train.tfrecords"
+    fpattern = "../data/tfrecords/normal.tfrecords"
     fl = []
     fl += glob.glob(fpattern)
     fl = glob.glob(fpattern)

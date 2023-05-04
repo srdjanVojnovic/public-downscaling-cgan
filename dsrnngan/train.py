@@ -35,7 +35,7 @@ def train_model(*,
         noise_shape = (img_shape[0], img_shape[1], latent_variables)
         noise_gen = noise.NoiseGenerator(noise_shape, batch_size=batch_size)
         loss_log = model.train(batch_gen_train, noise_gen,
-                               steps_per_checkpoint, training_ratio=10)
+                               steps_per_checkpoint, training_ratio=5)
 
     elif mode == 'det':
         loss_log = model.train(batch_gen_train, steps_per_checkpoint)
@@ -48,6 +48,7 @@ def train_model(*,
                          latent_variables=latent_variables,
                          num_cases=num_cases,  # number of examples to plot
                          ens_size=4,  # number of ensemble members to draw for each example
-                         out_fn=plot_fn)
+                         out_fn=plot_fn,
+                         disc=model.disc)
                         
     return loss_log

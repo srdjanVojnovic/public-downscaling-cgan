@@ -256,4 +256,4 @@ if __name__ == "__main__":
         plots.plot_histograms(log_folder, val_years, ranks=ranks_to_save, N_ranks=11)
 
     # ADDED
-    create_xarray(model.gen, data_gen_valid, noise_channels=noise_channels, num_cases=val_size)
+    create_xarray(model.gen, data_gen_valid, noise_channels=noise_channels, num_cases=4320)

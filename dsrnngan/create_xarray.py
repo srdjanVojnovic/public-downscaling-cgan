@@ -1,6 +1,7 @@
 import numpy as np
 import xarray as xr
 from noise import NoiseGenerator
+import data
 
 def create_xarray(gen, data_gen, ens_size=4, noise_channels=4, num_cases=64):
     data_gen_iter = iter(data_gen)
@@ -8,11 +9,13 @@ def create_xarray(gen, data_gen, ens_size=4, noise_channels=4, num_cases=64):
     generated_images = []
 
     for kk in range(num_cases):
+        print(kk)
         inputs, outputs = next(data_gen_iter)
         cond = inputs['lo_res_inputs']
         const = inputs['hi_res_inputs']
         seq_real = outputs['output']
         seq_real = seq_real.reshape((60, 60))
+        seq_real = data.denormalise(seq_real)
         original_images.append(seq_real)
         batch_size = cond.shape[0]
         seq_gen = []
@@ -22,6 +25,9 @@ def create_xarray(gen, data_gen, ens_size=4, noise_channels=4, num_cases=64):
 
             gen_image = gen.predict([cond, const, noise_gen()]).reshape((60, 60))
             seq_gen.append(gen_image)
+
+        
+        seq_gen = [data.denormalise(seq) for seq in seq_gen]
         generated_images.append(seq_gen)
 
     # Generate some example data
@@ -31,10 +37,7 @@ def create_xarray(gen, data_gen, ens_size=4, noise_channels=4, num_cases=64):
 
     # generated_images = np.random.rand(720, 4, 60, 60)
     generated_images = np.array(generated_images)
-    print(generated_images.shape)
-    print(generated_images[0][0].max())
-
-
+    
     # Define the dimensions and coordinates for the xarray
     dims = ('original_image', 'generated_image', 'x', 'y')
     coords = {'original_image': np.arange(num_cases), 'generated_image': np.arange(ens_size), 'x': np.arange(60), 'y': np.arange(60)}
@@ -46,7 +49,7 @@ def create_xarray(gen, data_gen, ens_size=4, noise_channels=4, num_cases=64):
         coords=coords,
     )
 
-    xarr_gen.to_netcdf('../data/samples/gen.nc')
+    xarr_gen.to_netcdf('../data/samples/normal/gen_last.nc')
 
     dims = ('original_image', 'x', 'y')
     coords = {'original_image': np.arange(num_cases), 'x': np.arange(60), 'y': np.arange(60)}
@@ -57,5 +60,5 @@ def create_xarray(gen, data_gen, ens_size=4, noise_channels=4, num_cases=64):
         coords=coords,
     )
     
-    xarr_real.to_netcdf('../data/samples/real.nc')
+    xarr_real.to_netcdf('../data/samples/normal/real_last.nc')
     
